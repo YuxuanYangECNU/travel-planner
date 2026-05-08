@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#1B3A5C">
+  <title>旅行规划 · Travel Planner</title>
+
+  <link rel="stylesheet" href="css/styles.css">
+
+  <!-- 1. 配置（含 API Key） -->
+  <script src="js/config.js"></script>
+
+  <!-- 2. 安全密钥必须在 AMap SDK 之前 -->
+  <script>
+    window._AMapSecurityConfig = { securityJsCode: CONFIG.AMAP_SECRET };
+  </script>
+
+  <!-- 3. 用 document.write 同步加载 AMap，保证后续脚本运行时 AMap 已就绪 -->
+  <script>
+    document.write(
+      '<script src="https://webapi.amap.com/maps?v=2.0' +
+      '&key=' + CONFIG.AMAP_KEY +
+      '&plugin=AMap.Driving,AMap.Geocoder,AMap.PlaceSearch,AMap.AutoComplete,AMap.DistrictSearch,AMap.Walking,AMap.Riding,AMap.Transfer"><\/script>'
+    );
+  </script>
+</head>
+<body>
+
+  <!-- ============================================================
+       PAGE 1: 起终点输入
+       ============================================================ -->
+  <div id="page-onboarding" class="page">
+    <svg class="mountain-bg" viewBox="0 0 1200 400" preserveAspectRatio="none">
+      <path d="M0,400 L0,260 L150,180 L280,220 L420,140 L560,200 L700,120 L850,180 L1000,100 L1200,160 L1200,400 Z"
+            fill="rgba(255,255,255,0.5)"/>
+      <path d="M0,400 L0,300 L120,260 L260,290 L400,230 L540,280 L680,210 L820,260 L960,200 L1200,240 L1200,400 Z"
+            fill="rgba(255,255,255,0.7)"/>
+    </svg>
+
+    <div class="onboarding-wrap">
+      <div class="onboarding-top-row">
+        <div class="brand-mark">TRAVEL · 旅行规划</div>
+        <button class="my-trips-btn" id="my-trips-btn" style="display:none">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+          <span>我的行程</span>
+          <span class="my-trips-count" id="my-trips-count">0</span>
+        </button>
+      </div>
+
+      <!-- 上次行程恢复条（默认隐藏） -->
+      <div class="saved-trip-banner hidden" id="saved-banner">
+        <div class="saved-icon">📌</div>
+        <div class="saved-text">
+          <div class="saved-title" id="saved-title">上次的行程</div>
+          <div class="saved-sub" id="saved-sub">--</div>
+        </div>
+        <div class="saved-actions">
+          <button class="saved-btn-restore" id="saved-restore">恢复</button>
+          <button class="saved-btn-discard" id="saved-discard" aria-label="删除">✕</button>
+        </div>
+      </div>
+
+      <h1 class="onboarding-title">说走就走<br/>下一站去哪？</h1>
+      <p class="onboarding-subtitle">告诉我你从哪出发、想去哪几座城市，我替你设计最优路线。</p>
+
+      <div class="field-block">
+        <label class="field-label">从哪里出发</label>
+        <div class="origin-input-wrap">
+          <input id="origin-input" class="glass-input" type="text" placeholder="搜索城市，比如：上海、北京、深圳、广州" autocomplete="off"/>
+          <div class="ac-dropdown" id="origin-ac"></div>
+        </div>
+        <div class="field-hint">从下拉中选择城市（也能直接输入），用于规划起点到第一站的路线</div>
+      </div>
+
+      <div class="field-block">
+        <label class="field-label">目的地（可多选）</label>
+        <div class="tag-input-wrap" id="destination-tags">
+          <input id="destination-input" class="tag-input-field" type="text" placeholder="搜索城市，比如：长沙、成都、杭州"/>
+        </div>
+        <div class="field-hint">下拉里只会显示城市/区县，从下拉点击添加。具体景点请去下一步的"+ 自己加"</div>
+      </div>
+
+      <div class="field-block">
+        <label class="field-label">出行日期</label>
+        <div class="date-range">
+          <div class="date-cell">
+            <span class="date-mini-label">出发</span>
+            <input type="date" id="start-date" class="date-input"/>
+          </div>
+          <div class="date-arrow">→</div>
+          <div class="date-cell">
+            <span class="date-mini-label">返回</span>
+            <input type="date" id="end-date" class="date-input"/>
+          </div>
+        </div>
+        <div class="date-summary" id="date-summary">还没选日期</div>
+      </div>
+
+      <div class="onboarding-cta">
+        <button class="cta-button" id="onboarding-next" disabled>
+          <span>下一步</span>
+          <span class="arrow">→</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       PAGE 2: 偏好选项
+       ============================================================ -->
+  <div id="page-preferences" class="page hidden">
+    <header class="app-header">
+      <div class="container">
+        <button class="icon-button" id="prefs-back" aria-label="返回">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+        </button>
+        <div class="header-title">旅行偏好</div>
+      </div>
+      <div class="container">
+        <div class="step-dots">
+          <div class="step-dot done"></div>
+          <div class="step-dot active"></div>
+          <div class="step-dot"></div>
+          <div class="step-dot"></div>
+        </div>
+      </div>
+    </header>
+
+    <div class="prefs-content container">
+      <div class="prefs-intro">
+        <h2 id="prefs-route">出发地 → 目的地</h2>
+        <p>选几个偏好让规划更贴合你</p>
+      </div>
+
+      <div class="field-block">
+        <label class="field-label">出行方式</label>
+        <div class="option-grid" data-prefs="transport">
+          <button class="option-chip" data-value="driving"><span class="chip-emoji">🚗</span>自驾<span class="chip-sub">最灵活</span></button>
+          <button class="option-chip" data-value="public"><span class="chip-emoji">🚄</span>公交/打车<span class="chip-sub">即将支持</span></button>
+        </div>
+      </div>
+
+      <div class="field-block">
+        <label class="field-label">景点偏好</label>
+        <div class="option-grid" data-prefs="style">
+          <button class="option-chip" data-value="popular"><span class="chip-emoji">🔥</span>网红打卡<span class="chip-sub">热门必去</span></button>
+          <button class="option-chip" data-value="niche"><span class="chip-emoji">💎</span>小众宝藏<span class="chip-sub">人少惊喜</span></button>
+          <button class="option-chip" data-value="mixed"><span class="chip-emoji">✨</span>都要<span class="chip-sub">混合搭配</span></button>
+        </div>
+      </div>
+
+      <div class="field-block">
+        <label class="field-label">预算（元，可选）</label>
+        <div class="budget-input-wrap">
+          <span class="currency">¥</span>
+          <input id="budget-input" class="budget-input" type="number" placeholder="不填表示不限"/>
+        </div>
+        <div class="budget-quick">
+          <button data-value="500">¥500</button>
+          <button data-value="1000">¥1k</button>
+          <button data-value="2000">¥2k</button>
+          <button data-value="5000">¥5k</button>
+          <button data-value="10000">¥1万</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="bottom-cta-bar">
+      <div class="container">
+        <button class="cta-button" id="prefs-next" disabled>
+          <span>挑景点</span>
+          <span class="arrow">→</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       PAGE 3: 景点池（多选 + 收藏）
+       ============================================================ -->
+  <div id="page-pool" class="page hidden">
+    <header class="app-header">
+      <div class="container">
+        <button class="icon-button" id="pool-back" aria-label="返回">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+        </button>
+        <div class="header-title">挑选景点</div>
+      </div>
+      <div class="container">
+        <div class="step-dots">
+          <div class="step-dot done"></div>
+          <div class="step-dot done"></div>
+          <div class="step-dot active"></div>
+          <div class="step-dot"></div>
+        </div>
+      </div>
+      <div class="container">
+        <div class="pool-tabs" id="city-tabs"></div>
+      </div>
+    </header>
+
+    <div class="pool-content">
+      <div class="pool-search-wrap">
+        <span class="pool-search-icon">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        </span>
+        <input id="pool-search" class="pool-search-input" type="text" placeholder="搜索景点 / 餐厅 / 酒店…（留空看默认景点）"/>
+        <button id="pool-search-clear" class="pool-search-clear" style="display:none">✕</button>
+      </div>
+      <div class="pool-intro">
+        <h3>点击卡片选中 · 心形收藏常用景点</h3>
+      </div>
+      <div class="pagination" id="pagination-top"></div>
+      <div class="attraction-grid" id="attraction-grid"></div>
+      <div class="pagination" id="pagination"></div>
+    </div>
+
+    <div class="bottom-cta-bar" id="pool-cta-bar">
+      <div class="container">
+        <div class="cta-info" id="pool-cta-info">已选 <strong>0</strong> 个景点</div>
+        <button class="cta-button" id="pool-optimize" disabled>
+          <span>优化路线</span>
+          <span class="arrow">→</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       PAGE 4: 时间轴
+       ============================================================ -->
+  <div id="page-timeline" class="page hidden">
+    <header class="app-header">
+      <div class="container">
+        <button class="icon-button" id="timeline-back" aria-label="返回">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+        </button>
+        <div class="header-title" id="timeline-route">行程</div>
+        <button class="icon-button" id="timeline-save" aria-label="保存这条行程" title="保存这条行程">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+            <polyline points="17 21 17 13 7 13 7 21"/>
+            <polyline points="7 3 7 8 15 8"/>
+          </svg>
+        </button>
+        <button class="icon-button" id="timeline-map" aria-label="地图视图">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/>
+            <line x1="8" y1="2" x2="8" y2="18"/>
+            <line x1="16" y1="6" x2="16" y2="22"/>
+          </svg>
+        </button>
+        <button class="icon-button" id="timeline-reset" aria-label="新建行程" title="新建一段行程">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 5v14M5 12h14"/>
+          </svg>
+        </button>
+      </div>
+      <div class="container">
+        <div class="day-tabs" id="day-tabs"></div>
+      </div>
+    </header>
+
+    <div class="timeline-content container">
+      <div class="day-summary" id="day-summary"></div>
+      <ul class="timeline-list" id="timeline-list"></ul>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       PAGE 5: 地图视图
+       ============================================================ -->
+  <div id="page-map" class="page hidden">
+    <div class="map-header">
+      <button class="icon-button" id="map-close" aria-label="关闭">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <div class="map-header-info" id="map-header-info">行程地图</div>
+    </div>
+    <div id="map-container"></div>
+  </div>
+
+  <!-- ============================================================
+       全局：Toast、加载屏
+       ============================================================ -->
+  <div class="toast" id="toast"></div>
+
+  <div class="loading-screen hidden" id="loading-screen">
+    <div class="loading-orb"></div>
+    <div class="loading-text" id="loading-text">加载中…</div>
+    <div class="loading-progress" id="loading-progress"></div>
+  </div>
+
+  <!-- ============================================================
+       模态框：手动添加景点（高德搜不到时用，比如东京塔）
+       ============================================================ -->
+  <div class="modal-backdrop" id="manual-modal-backdrop"></div>
+  <div class="modal-sheet manual-modal-sheet" id="manual-modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">📍 手动添加景点</div>
+    <p class="modal-sub">高德搜不到的地方，自己输入名字 + 在地图上点击标记位置</p>
+
+    <div class="form-group">
+      <label class="form-label">🔍 先在高德里搜索（推荐 — 找到了就一键填入）</label>
+      <div class="manual-search-wrap">
+        <input id="manual-search" class="form-text-input" type="text" placeholder="比如：故宫博物院、外滩、西湖、东京塔" autocomplete="off"/>
+        <div class="manual-search-dd ac-dropdown" id="manual-search-dd"></div>
+      </div>
+      <div class="form-hint-mini">高德搜不到？继续往下，手动输入名字 + 标记位置</div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">名字 <span class="form-required">*</span></label>
+      <input id="manual-name" class="form-text-input" type="text" maxlength="40" placeholder="比如：东京塔、艾菲尔铁塔"/>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">在地图上点击标记位置 <span class="form-required">*</span></label>
+      <div id="manual-map-container" class="manual-map"></div>
+      <div class="manual-coords" id="manual-coords">还没标记位置</div>
+
+      <div class="manual-coord-row">
+        <div class="coord-input-block">
+          <label class="coord-label" for="manual-lat">纬度 LAT</label>
+          <input id="manual-lat" class="coord-input" type="text" inputmode="decimal" placeholder="35.6586"/>
+        </div>
+        <div class="coord-input-block">
+          <label class="coord-label" for="manual-lng">经度 LNG</label>
+          <input id="manual-lng" class="coord-input" type="text" inputmode="decimal" placeholder="139.7454"/>
+        </div>
+      </div>
+      <button class="coord-jump-btn" id="manual-coord-jump" type="button">跳到这个坐标 →</button>
+      <div class="coord-hint">从 Google/Apple Maps 复制坐标也行（经纬度顺序：纬 lat 在前，经 lng 在后）</div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">地址（可选，会自动填）</label>
+      <input id="manual-address" class="form-text-input" type="text" placeholder="点击地图后会自动填充"/>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">推荐游玩时长</label>
+      <div class="duration-control duration-control-compact">
+        <button class="duration-btn" id="manual-dur-minus" aria-label="减">−</button>
+        <div class="duration-value">
+          <span class="duration-num" id="manual-dur-num">2</span>
+          <span class="duration-unit">小时</span>
+        </div>
+        <button class="duration-btn" id="manual-dur-plus" aria-label="加">+</button>
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn-secondary" id="manual-cancel">取消</button>
+      <button class="btn-primary" id="manual-save">保存到我的景点</button>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       模态框：保存行程（命名 + 加入收藏）
+       ============================================================ -->
+  <div class="modal-backdrop" id="save-modal-backdrop"></div>
+  <div class="modal-sheet" id="save-modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">💾 保存这次行程</div>
+    <p class="modal-sub">给它起个名字，下次在"我的行程"里能找到</p>
+    <div class="form-group">
+      <label class="form-label">名字</label>
+      <input id="save-name-input" class="form-text-input" type="text" maxlength="50" placeholder="比如：长沙周末三日游"/>
+    </div>
+    <label class="checkbox-row" id="save-fav-row">
+      <input type="checkbox" id="save-fav-check"/>
+      <span class="checkbox-text">
+        <span class="checkbox-title">⭐ 加入收藏</span>
+        <span class="checkbox-sub">收藏的行程会在我的行程列表置顶</span>
+      </span>
+    </label>
+    <div class="modal-actions">
+      <button class="btn-secondary" id="save-cancel">取消</button>
+      <button class="btn-primary" id="save-confirm">保存</button>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       模态框：已保存的行程列表
+       ============================================================ -->
+  <div class="modal-backdrop" id="trips-modal-backdrop"></div>
+  <div class="modal-sheet" id="trips-modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">📚 已保存的行程</div>
+    <p class="modal-sub">点恢复进入时间轴，或滑动到底部查看更多</p>
+    <div class="trips-list" id="trips-list"></div>
+    <div class="modal-actions">
+      <button class="btn-secondary" id="trips-close" style="flex: 1">关闭</button>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       模态框：编辑游玩时长
+       ============================================================ -->
+  <div class="modal-backdrop" id="edit-modal-backdrop"></div>
+  <div class="modal-sheet" id="edit-modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">⏱ 调整游玩时长</div>
+    <p class="modal-sub" id="edit-spot-name">--</p>
+    <div class="duration-control">
+      <button class="duration-btn" id="duration-minus" aria-label="减少">−</button>
+      <div class="duration-value">
+        <span class="duration-num" id="duration-num">2</span>
+        <span class="duration-unit">小时</span>
+      </div>
+      <button class="duration-btn" id="duration-plus" aria-label="增加">+</button>
+    </div>
+    <div class="duration-presets">
+      <button data-h="0.5">30 分钟</button>
+      <button data-h="1">1 小时</button>
+      <button data-h="2">2 小时</button>
+      <button data-h="4">半天</button>
+      <button data-h="8">一整天</button>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-secondary" id="edit-cancel">取消</button>
+      <button class="btn-primary" id="edit-save">保存</button>
+    </div>
+  </div>
+
+  <!-- 业务脚本（顺序：data → route → map → ui → app） -->
+  <script src="js/data.js"></script>
+  <script src="js/route.js"></script>
+  <script src="js/map.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
