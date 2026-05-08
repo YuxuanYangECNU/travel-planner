@@ -1674,31 +1674,55 @@ input, textarea { font-family: inherit; }
   flex-direction: column;
   gap: 4px;
   transition: border-color 0.2s var(--ease);
+  cursor: pointer;
+  position: relative;
+  min-height: 60px;
 }
 .date-cell:focus-within { border-color: var(--c-sky); }
+.date-cell:active { background: var(--c-glacier); }
 .date-mini-label {
   font-size: 11px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--c-ink-3);
   font-weight: 600;
+  pointer-events: none;
 }
 .date-input {
   width: 100%;
+  min-height: 24px;
   padding: 0;
   background: transparent;
   border: none;
-  font-size: 16px;
+  font-size: 16px;     /* 16px 防止 iOS 自动放大 */
   font-weight: 600;
   color: var(--c-ink);
   font-family: var(--font-display);
   letter-spacing: -0.01em;
   outline: none;
-  -webkit-appearance: none;
-  appearance: none;
+  cursor: pointer;
+  /* 注意：不要写 -webkit-appearance: none，会破坏 iOS Safari 原生日期选择器！ */
 }
-/* iOS Safari date 占位 */
-.date-input:not(:valid) { color: var(--c-ink-3); font-weight: 500; }
+/* iOS Safari 让 date input 内容左对齐 */
+.date-input::-webkit-date-and-time-value { text-align: left; }
+
+/* 自定义 placeholder：当输入为空时显示"点击选择" */
+.date-placeholder {
+  position: absolute;
+  left: 14px;
+  bottom: 12px;
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--c-ink-3);
+  pointer-events: none;
+  font-family: var(--font-display);
+  display: none;
+}
+/* 当 date 输入为空（无 has-value 类） → 显示 placeholder，隐藏 input 文字颜色 */
+.date-cell:not(.has-value) .date-placeholder { display: block; }
+.date-cell:not(.has-value) .date-input { color: transparent; caret-color: var(--c-sky); }
+.date-cell:not(.has-value) .date-input::-webkit-datetime-edit { color: transparent; }
+
 .date-arrow {
   color: var(--c-ink-3);
   font-size: 18px;

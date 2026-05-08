@@ -218,17 +218,42 @@
     const endInput = UI.$('#end-date');
     startInput.min = today;
     endInput.min = today;
+
+    // 让 cell 根据 input 是否有值切换 has-value 类（控制自定义 placeholder 显隐）
+    function syncDateCell(input) {
+      const cell = input.closest('.date-cell');
+      if (cell) cell.classList.toggle('has-value', !!input.value);
+    }
+    syncDateCell(startInput);
+    syncDateCell(endInput);
+
     startInput.addEventListener('change', () => {
       state.trip.startDate = startInput.value;
-      // 终止日期不能早于出发
+      syncDateCell(startInput);
       if (startInput.value) endInput.min = startInput.value;
       UI.renderDateSummary(state.trip.startDate, state.trip.endDate);
       checkOnboardingReady();
     });
     endInput.addEventListener('change', () => {
       state.trip.endDate = endInput.value;
+      syncDateCell(endInput);
       UI.renderDateSummary(state.trip.startDate, state.trip.endDate);
       checkOnboardingReady();
+    });
+
+    // 移动端：点 cell 任意位置主动 focus + 触发原生选择器（兼容性兜底）
+    [startInput, endInput].forEach(input => {
+      const cell = input.closest('.date-cell');
+      if (!cell) return;
+      cell.addEventListener('click', e => {
+        // 已经点到 input 本体就让浏览器自己处理
+        if (e.target === input) return;
+        try {
+          input.focus();
+          // 现代浏览器支持的程序化打开 picker
+          if (typeof input.showPicker === 'function') input.showPicker();
+        } catch (_) { /* 忽略 - 不支持的浏览器 fallback 到 focus */ }
+      });
     });
 
     // 上次行程恢复条
