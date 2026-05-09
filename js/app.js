@@ -674,6 +674,8 @@
       UI.renderTimelinePage(state);
       UI.hideLoading();
       UI.showPage('#page-timeline');
+      // ★ 后台精算每段路真实时间（矩阵阶段可能有部分被频率限制回退到直线估算）
+      prefetchDaySegmentTimes();
     } catch (e) {
       console.error(e);
       UI.hideLoading();
@@ -702,6 +704,8 @@
       state.currentDay = parseInt(btn.dataset.day);
       UI.renderTimelinePage(state);
       saveCurrentTrip();
+      // 切换天数后也预取
+      prefetchDaySegmentTimes();
     });
 
     // 时间轴所有点击的事件委托
@@ -877,6 +881,47 @@
    * 路段展开时按需加载 5 种交通方式
    * 缓存到 state.segCache，下次秒开
    */
+  /**
+   * 后台串行精算当前天每段路的真实时间（用户主显方式）
+   * 因为优化阶段的批量矩阵可能被高德频率限制回退到直线估算（不准）
+   * 拿到真实数据后实时更新对应路段 + Day Summary
+   */
+  let _prefetchToken = 0;
+  async function prefetchDaySegmentTimes() {
+    const token = ++_prefetchToken;       // 切天时旧任务自然终止
+    const day = state.itinerary.days[state.currentDay];
+    if (!day || day.length < 2) return;
+    const cityName = (state.trip.destinations[0] && state.trip.destinations[0].name) || '';
+
+    for (let i = 0; i < day.length - 1; i++) {
+      if (token !== _prefetchToken) return;   // 用户切到别的天 / 离开 → 终止
+      const from = day[i];
+      const to = day[i + 1];
+      const segKey = `${from.id}->${to.id}`;
+      const mode = state.segPrimaryMode[segKey]
+        || (state.trip.transport === 'public' ? 'transit' : 'driving');
+
+      // 已有缓存就跳过
+      if (state.segCache[segKey] && state.segCache[segKey][mode]) continue;
+
+      try {
+        const data = await Route.getModeRoute(mode, from.location, to.location, cityName);
+        if (token !== _prefetchToken) return;
+        if (!state.segCache[segKey]) state.segCache[segKey] = {};
+        state.segCache[segKey][mode] = data;
+        // 更新该路段 DOM（如果还在当前天）
+        const segId = `seg-${from.id}-${to.id}`;
+        UI.updateSegmentPrimary(segId, mode, data);
+      } catch (e) {
+        // 失败保留矩阵估算值；不打扰用户
+      }
+      // 间隔 ~150ms，避开高德频率限制
+      await new Promise(r => setTimeout(r, 150));
+    }
+    // 全部完成后刷新 Day Summary 让"路上 / 总用时"也用真实值
+    if (token === _prefetchToken) UI.renderDaySummary(state);
+  }
+
   async function loadSegmentModes(segEl) {
     const fromId = segEl.dataset.fromId;
     const toId = segEl.dataset.toId;

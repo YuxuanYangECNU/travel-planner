@@ -63,12 +63,15 @@ input, textarea { font-family: inherit; }
   overflow-y: auto;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
-  transition: opacity 0.45s var(--ease), transform 0.45s var(--ease);
+  transition: opacity 0.45s var(--ease), transform 0.45s var(--ease), visibility 0s 0s;
 }
 .page.hidden {
   opacity: 0;
   transform: translateX(20px);
   pointer-events: none;
+  visibility: hidden;
+  /* visibility 立刻在过渡结束时切换，确保隐藏页面不再吃触摸事件（修复手机端从地图回来无法滚动的问题） */
+  transition: opacity 0.45s var(--ease), transform 0.45s var(--ease), visibility 0s 0.45s;
 }
 
 /* 通用容器 */

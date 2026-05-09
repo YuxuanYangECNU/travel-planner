@@ -13,8 +13,15 @@ const UI = (() => {
 
   function showPage(pageId) {
     $$('.page').forEach(p => p.classList.add('hidden'));
-    $(pageId).classList.remove('hidden');
-    window.scrollTo(0, 0);
+    const page = $(pageId);
+    page.classList.remove('hidden');
+    // 滚回顶部（page 自己的滚动容器）
+    page.scrollTop = 0;
+    // ★ iOS Safari workaround：fixed 元素从 hidden→show 后内部 overflow-y 不响应触摸
+    //   触发一次 reflow 重新激活滚动监听
+    void page.offsetHeight;
+    // 兜底：让浏览器在下一帧再 settle 一下
+    requestAnimationFrame(() => { page.scrollTop = 0; });
   }
 
   let toastTimer = null;
